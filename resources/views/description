@@ -1,0 +1,413 @@
+
+    public function index_search()
+    {
+        return view('search');
+    }
+
+
+    public function search_api(Request $request)
+    {
+        // Move API key to environment variable in production
+        $apiKey = config('services.serpapi.key', 'cc6554b22dafbb5a82fd221357313abbd39bd629af705d422ff1d6e111c4c5e0');
+        $item = trim($request->input('item', 'DRX-2.4'));
+        $brand = trim($request->input('brand', 'INTEGRA-HARB'));
+        $category = trim($request->input('category', 'Electronics'));
+        $query = "$brand $item in $category";
+        $searchUrl = "https://serpapi.com/search.json?engine=google_shopping&q=" . urlencode($query) . "&api_key=" . $apiKey;
+    
+        // Make the search API request
+        $response = Http::get($searchUrl);
+        $data = $response->json();
+    
+        // Check if shopping results are available
+        if (!empty($data['shopping_results'])) {
+            $firstResult = $data['shopping_results'][0];
+    
+            // Try to get the link field first, then fall back to product_link
+            $productLink = $firstResult['link'] ?? $firstResult['product_link'] ?? null;
+    
+            // Attempt to extract the actual retailer URL if it's a Google Shopping link
+            if ($productLink && strpos($productLink, 'google.com/shopping') !== false) {
+                try {
+                    // First fetch the Google Shopping page
+                    $shoppingPage = Http::withHeaders([
+                        'User-Agent' => 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                    ])->get($productLink);
+    
+                    if ($shoppingPage->successful()) {
+                        $shopHtml = $shoppingPage->body();
+    
+                        // Try to extract retailer URL
+                        if (preg_match('/href="([^"]+)"[^>]*>Visit site<\/a>/i', $shopHtml, $matches)) {
+                            $productLink = html_entity_decode($matches[1]);
+                            \Log::info("Found retailer URL: $productLink");
+                        }
+                    }
+                } catch (\Exception $e) {
+                    \Log::error("Error extracting retailer URL: " . $e->getMessage());
+                }
+            }
+    
+            // Default values
+            $description = 'N/A';
+            $size = 'N/A';
+            $weight = 'N/A';
+            $height = 'N/A';
+            $width = 'N/A';
+    
+            if ($productLink) {
+                try {
+                    // Rotate user agents to avoid detection
+                    $userAgents = [
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+                        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/14.0 Safari/605.1.15',
+                        'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:89.0) Gecko/20100101 Firefox/89.0'
+                    ];
+                    $randomUserAgent = $userAgents[array_rand($userAgents)];
+    
+                    // Fetch the product page content with a user agent to appear more like a browser
+                    $productPage = Http::withHeaders([
+                        'User-Agent' => $randomUserAgent,
+                        'Accept' => 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                        'Accept-Language' => 'en-US,en;q=0.5'
+                    ])->timeout(15)->get($productLink);
+    
+                    if ($productPage->successful()) {
+                        $html = $productPage->body();
+    
+                        // Initialize DOMDocument and DOMXPath
+                        $doc = new DOMDocument();
+                        libxml_use_internal_errors(true); // Suppress HTML parsing errors
+                        $doc->loadHTML('<?xml encoding="utf-8" ?>' . $html); // Add encoding to handle various characters
+                        libxml_clear_errors();
+                        $xpath = new DOMXPath($doc);
+    
+                        // // --- Extract Description with Enhanced Approach ---
+                        // $descriptionParts = [];
+                        
+                        // // Try to get the meta description first
+                        // $descriptionNodes = $xpath->query('//meta[@name="description"]/@content');
+                        // if ($descriptionNodes && $descriptionNodes->length > 0) {
+                        //     $descriptionParts[] = trim($descriptionNodes->item(0)->nodeValue);
+                        // }
+                        
+                        // // Look for common description containers
+                        // $descriptionSources = [
+                        //     '//div[@id="productDescription"]//p',
+                        //     '//div[@id="feature-bullets"]//li/span[@class="a-list-item"]',
+                        //     '//div[@class="a-section a-spacing-medium a-spacing-top-small"]/div[@class="a-row"]/span[@class="a-size-base"]',
+                        //     '//div[contains(@class, "product-description")]//p',
+                        //     '//div[contains(@class, "description")]//p',
+                        //     '//section[contains(@class, "description")]//p'
+                        // ];
+                        
+                        // foreach ($descriptionSources as $source) {
+                        //     $nodes = $xpath->query($source);
+                        //     if ($nodes && $nodes->length > 0) {
+                        //         foreach ($nodes as $node) {
+                        //             $content = trim($node->textContent);
+                        //             if (!empty($content)) {
+                        //                 $descriptionParts[] = $content;
+                        //             }
+                        //         }
+                        //     }
+                        // }
+                        
+                        // // If still no meaningful description, look for longer text paragraphs
+                        // if (empty($descriptionParts)) {
+                        //     $bodyText = $xpath->query('//body//p[string-length(text()) > 100]');
+                        //     if ($bodyText && $bodyText->length > 0) {
+                        //         foreach ($bodyText as $node) {
+                        //             $content = trim($node->textContent);
+                        //             if (!empty($content)) {
+                        //                 $descriptionParts[] = $content;
+                        //             }
+                        //         }
+                        //     }
+                        // }
+                        
+                        // // Combine all parts into a single description
+                        // if (!empty($descriptionParts)) {
+                        //     $description = implode(" ", $descriptionParts);
+                        //     // Clean up the description
+                        //     $description = preg_replace('/\s+/', ' ', $description); // Replace multiple spaces/newlines with a single space
+                        // }
+
+
+
+                        // --- Extract Full Description Including Expanded Content ---
+$descriptionParts = [];
+
+// Try to get the meta description first
+$descriptionNodes = $xpath->query('//meta[@name="description"]/@content');
+if ($descriptionNodes && $descriptionNodes->length > 0) {
+    $descriptionParts[] = trim($descriptionNodes->item(0)->nodeValue);
+}
+
+// Look for common description containers including those that might be hidden/expandable
+$descriptionSources = [
+    // Standard description containers
+    '//div[@id="productDescription"]//p',
+    '//div[@id="feature-bullets"]//li/span[@class="a-list-item"]',
+    '//div[@class="a-section a-spacing-medium a-spacing-top-small"]/div[@class="a-row"]/span[@class="a-size-base"]',
+    '//div[contains(@class, "product-description")]//p',
+    '//div[contains(@class, "description")]//p',
+    '//section[contains(@class, "description")]//p',
+    
+    // Hidden/expandable content that appears when clicking "more"
+    '//div[contains(@class, "show-more-content")]//p',
+    '//div[contains(@class, "expanded-content")]//p',
+    '//div[contains(@class, "readMoreText")]//p',
+    '//div[contains(@id, "description-full")]//p',
+    '//div[contains(@class, "full-description")]//p',
+    '//div[contains(@class, "collapsed") and contains(@style, "display:none")]//p',
+    '//div[contains(@aria-hidden, "true")]//p',
+    '//div[contains(@class, "more-text")]//p',
+    '//div[@id="more-description"]//p'
+];
+
+// For elements that might be hidden by JavaScript/CSS
+$hiddenContentSelectors = [
+    '//div[contains(@class, "truncate-content")]//p',
+    '//div[contains(@style, "display:none")]//p',
+    '//div[contains(@style, "visibility:hidden")]//p',
+    '//div[contains(@class, "hidden")]//p',
+    '//div[contains(@class, "clamp")]//p'
+];
+
+// Combine all selectors
+$allSelectors = array_merge($descriptionSources, $hiddenContentSelectors);
+
+foreach ($allSelectors as $source) {
+    $nodes = $xpath->query($source);
+    if ($nodes && $nodes->length > 0) {
+        foreach ($nodes as $node) {
+            $content = trim($node->textContent);
+            if (!empty($content)) {
+                $descriptionParts[] = $content;
+            }
+        }
+    }
+}
+
+// Look for specific "Read More" buttons or toggles and try to get their associated content
+$readMoreButtons = $xpath->query('//a[contains(text(), "more") or contains(text(), "Read More") or contains(@class, "more")]');
+if ($readMoreButtons && $readMoreButtons->length > 0) {
+    foreach ($readMoreButtons as $button) {
+        // Try to find content related to this button
+        // Often the expanded content is a sibling or child of the button's parent
+        $relatedContent = $xpath->query('./following-sibling::div//p|../following-sibling::div//p|../../following-sibling::div//p', $button);
+        if ($relatedContent && $relatedContent->length > 0) {
+            foreach ($relatedContent as $node) {
+                $content = trim($node->textContent);
+                if (!empty($content)) {
+                    $descriptionParts[] = $content;
+                }
+            }
+        }
+    }
+}
+
+// If still no meaningful description, look for longer text paragraphs
+if (empty($descriptionParts)) {
+    $bodyText = $xpath->query('//body//p[string-length(text()) > 100]');
+    if ($bodyText && $bodyText->length > 0) {
+        foreach ($bodyText as $node) {
+            $content = trim($node->textContent);
+            if (!empty($content)) {
+                $descriptionParts[] = $content;
+            }
+        }
+    }
+}
+
+// Combine all parts into a single description
+if (!empty($descriptionParts)) {
+    $description = implode(" ", $descriptionParts);
+    // Clean up the description
+    $description = preg_replace('/\s+/', ' ', $description); // Replace multiple spaces/newlines with a single space
+}
+
+// For debugging: Print the full description to see what was extracted
+// echo "Full description (including expanded content): " . $description;
+    
+                        // --- Extract Size with Enhanced Logic ---
+                        $size = 'N/A'; // Default value
+                        
+                        // Look for dimension patterns in any text
+                        $dimensionNodes = $xpath->query('//body//text()');
+                        if ($dimensionNodes && $dimensionNodes->length > 0) {
+                            foreach ($dimensionNodes as $node) {
+                                $text = trim($node->nodeValue);
+                                // Look for patterns like "10 x 15 x 5 inches" or "10" x 15" x 5""
+                                if (preg_match('/(\d+\.?\d*)\s*[x×]\s*(\d+\.?\d*)\s*[x×]\s*(\d+\.?\d*)\s*(inch|in|cm|mm|"|\'\'|feet|ft)/i', $text, $matches)) {
+                                    $size = $matches[0]; // Use the full matched dimension string
+                                    \Log::info("Found size via pattern match", ['text' => $text, 'match' => $matches[0]]);
+                                    break;
+                                }
+                                // Look for "dimensions" or "measurements" followed by values
+                                if (preg_match('/(dimensions?|measurements?|size)[\s:]*(\d+\.?\d*\s*[x×]\s*\d+\.?\d*\s*[x×]\s*\d+\.?\d*\s*(?:inch|in|cm|mm|"|\'\'|feet|ft))/i', $text, $matches)) {
+                                    $size = $matches[2]; // Use the dimension part
+                                    \Log::info("Found size via dimension keyword", ['text' => $text, 'match' => $matches[2]]);
+                                    break;
+                                }
+                            }
+                        }
+    
+                        // --- Extract specific dimensions (Height, Width, Weight) ---
+                        // Extract values from spec tables with broadened selectors
+                        $specRows = $xpath->query('//table//tr | //div[contains(@class, "spec") or contains(@class, "detail")]//div');
+                        if ($specRows && $specRows->length > 0) {
+                            foreach ($specRows as $row) {
+                                $rowText = strtolower($row->textContent);
+                                
+                                // Check for height
+                                if (strpos($rowText, 'height') !== false && preg_match('/(\d+\.?\d*\s*(?:inch|in|cm|mm|"|\'\'|feet|ft))/i', $rowText, $matches)) {
+                                    $height = $matches[1];
+                                    \Log::info("Found height in spec row", ['text' => $rowText, 'height' => $height]);
+                                }
+                                
+                                // Check for width
+                                if (strpos($rowText, 'width') !== false && preg_match('/(\d+\.?\d*\s*(?:inch|in|cm|mm|"|\'\'|feet|ft))/i', $rowText, $matches)) {
+                                    $width = $matches[1];
+                                    \Log::info("Found width in spec row", ['text' => $rowText, 'width' => $width]);
+                                }
+                                
+                                // Check for weight
+                                if (strpos($rowText, 'weight') !== false && preg_match('/(\d+\.?\d*\s*(?:pound|lb|kg|g|oz))/i', $rowText, $matches)) {
+                                    $weight = $matches[1];
+                                    \Log::info("Found weight in spec row", ['text' => $rowText, 'weight' => $weight]);
+                                }
+                            }
+                        }
+    
+                        // Look for dimension info in list items or paragraphs with broader selectors
+                        $dimensionElements = $xpath->query('//li | //p | //span | //div');
+                        if ($dimensionElements && $dimensionElements->length > 0) {
+                            foreach ($dimensionElements as $element) {
+                                $text = strtolower($element->textContent);
+                                
+                                // Check for height
+                                if (strpos($text, 'height') !== false && $height === 'N/A' && 
+                                    preg_match('/height[^\d]*(\d+\.?\d*\s*(?:inch|in|cm|mm|"|\'\'|feet|ft))/i', $text, $matches)) {
+                                    $height = $matches[1];
+                                    \Log::info("Found height in text", ['text' => $text, 'height' => $height]);
+                                }
+                                
+                                // Check for width
+                                if (strpos($text, 'width') !== false && $width === 'N/A' && 
+                                    preg_match('/width[^\d]*(\d+\.?\d*\s*(?:inch|in|cm|mm|"|\'\'|feet|ft))/i', $text, $matches)) {
+                                    $width = $matches[1];
+                                    \Log::info("Found width in text", ['text' => $text, 'width' => $width]);
+                                }
+                                
+                                // Check for weight
+                                if (strpos($text, 'weight') !== false && $weight === 'N/A' && 
+                                    preg_match('/weight[^\d]*(\d+\.?\d*\s*(?:pound|lb|kg|g|oz))/i', $text, $matches)) {
+                                    $weight = $matches[1];
+                                    \Log::info("Found weight in text", ['text' => $text, 'weight' => $weight]);
+                                }
+                            }
+                        }
+    
+                        // --- Check for Schema.org data as a backup ---
+                        $scriptTags = $xpath->query('//script[@type="application/ld+json"]');
+                        if ($scriptTags && $scriptTags->length > 0) {
+                            foreach ($scriptTags as $scriptTag) {
+                                $jsonText = $scriptTag->textContent;
+                                $json = json_decode($jsonText, true);
+                                if (json_last_error() === JSON_ERROR_NONE && $json) {
+                                    // Handle both direct product and nested product in graph
+                                    $productData = null;
+                                    
+                                    if (isset($json['@type']) && ($json['@type'] === 'Product' || (is_array($json['@type']) && in_array('Product', $json['@type'])))) {
+                                        $productData = $json;
+                                    } elseif (isset($json['@graph']) && is_array($json['@graph'])) {
+                                        foreach ($json['@graph'] as $item) {
+                                            if (isset($item['@type']) && ($item['@type'] === 'Product' || (is_array($item['@type']) && in_array('Product', $item['@type'])))) {
+                                                $productData = $item;
+                                                break;
+                                            }
+                                        }
+                                    }
+                                    
+                                    if ($productData) {
+                                        // Update description if needed
+                                        if ($description === 'N/A' && isset($productData['description'])) {
+                                            $description = is_array($productData['description']) ? implode(', ', $productData['description']) : $productData['description'];
+                                        }
+                                        
+                                        // Update size
+                                        if ($size === 'N/A' && isset($productData['size'])) {
+                                            $size = is_array($productData['size']) ? implode(', ', $productData['size']) : $productData['size'];
+                                        }
+                                        
+                                        // Update weight
+                                        if ($weight === 'N/A' && isset($productData['weight'])) {
+                                            if (is_array($productData['weight']) && isset($productData['weight']['value'])) {
+                                                $weight = $productData['weight']['value'] . (isset($productData['weight']['unitText']) ? ' ' . $productData['weight']['unitText'] : '');
+                                            } else {
+                                                $weight = $productData['weight'];
+                                            }
+                                        }
+                                        
+                                        // Update dimensions
+                                        if ($height === 'N/A' && isset($productData['height'])) {
+                                            if (is_array($productData['height']) && isset($productData['height']['value'])) {
+                                                $height = $productData['height']['value'] . (isset($productData['height']['unitText']) ? ' ' . $productData['height']['unitText'] : '');
+                                            } else {
+                                                $height = $productData['height'];
+                                            }
+                                        }
+                                        
+                                        if ($width === 'N/A' && isset($productData['width'])) {
+                                            if (is_array($productData['width']) && isset($productData['width']['value'])) {
+                                                $width = $productData['width']['value'] . (isset($productData['width']['unitText']) ? ' ' . $productData['width']['unitText'] : '');
+                                            } else {
+                                                $width = $productData['width'];
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+    
+                        // Add debug logging to help identify the structure
+                        \Log::info("Product scraping results for $productLink", [
+                            'description' => substr($description, 0, 200) . (strlen($description) > 200 ? '...' : ''),
+                            'size' => $size,
+                            'weight' => $weight,
+                            'height' => $height,
+                            'width' => $width
+                        ]);
+                    } else {
+                        // Log the error or handle the failed request
+                        \Log::error("Failed to fetch product page: " . $productLink . " - Status: " . $productPage->status());
+                    }
+                } catch (\Exception $e) {
+                    // Handle any exceptions during the process
+                    \Log::error("Error fetching or parsing product page: " . $productLink . " - " . $e->getMessage());
+                }
+            }
+    
+            return response()->json([
+                "status" => "success",
+                "title" => $firstResult['title'] ?? "N/A",
+                "price" => $firstResult['price'] ?? "N/A",
+                "datasheet_url" => $productLink,
+                "images" => array_slice(array_column($data['shopping_results'], 'thumbnail'), 0, 3),
+                "brand" => $brand,
+                "store" => $firstResult['source'] ?? "N/A",
+                "ratings" => $firstResult['rating'] ?? "N/A",
+                "reviews" => $firstResult['reviews'] ?? "N/A",
+                "description" => $description,
+                "size" => $size,
+                "weight" => $weight,
+                "height" => $height,
+                "width" => $width,
+            ]);
+        }
+    
+        return response()->json(["status" => "error", "message" => "No shopping results found."]);
+    }
+}
