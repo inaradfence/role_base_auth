@@ -9,12 +9,12 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">
                 <div class="p-6 text-gray-900 dark:text-gray-100">
-                    <form action="{{ route('permission.store') }}" method="POST" class="mx-auto w-1/2" enctype="multipart/form-data">
+                    <form action="{{ route('permission.update', $permission->id) }}" method="POST" class="mx-auto w-1/2" enctype="multipart/form-data">
                     @csrf                      
 
                    <div class="my-3">
                     <label for="">Name</label>
-                    <input type="text" name="name" class="border-2  rounded-md w-full text-black mb-4"placeholder="Enter Name" style="color: black;">
+                    <input type="text" value="{{ $permission->name }}" name="name" class="border-2  rounded-md w-full text-black mb-4"placeholder="Enter Name" style="color: black;">
 
                     @error('name')
                       <p class="text-red-500">{{ $message }}</p>                        

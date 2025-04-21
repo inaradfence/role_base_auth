@@ -1,7 +1,7 @@
 <x-app-layout>
     <x-slot name="header">
         <h2 class="font-semibold text-xl text-gray-800 dark:text-gray-200 leading-tight">
-            {{ __('Permissions') }}
+            {{ __('roles') }}
         </h2>
     </x-slot>
 
@@ -20,17 +20,17 @@
                 </tr>
             </thead>
             <tbody class="bg-white">
-                @if ($permissions->isNotEmpty())
-              @foreach ($permissions as $permission)
+                @if ($roles->isNotEmpty())
+              @foreach ($roles as $role)
                 <tr class="border-b">
                     <td class="px-4 py-2 text-left">{{ $loop->iteration }}</td>
-                    <td class="px-4 py-2 text-left">{{ $permission->name }}</td>
+                    <td class="px-4 py-2 text-left">{{ $role->name }}</td>
                     <td class="px-4 py-2 text-left">
-                        {{ $permission->created_at->format('d-m-Y') }}
+                        {{ $role->created_at->format('d-m-Y') }}
                     </td>
                     <td class="px-4 py-2 text-center">
-                        <a href="{{ route('permission.edit', $permission->id) }}" class="bg-slate-700 text-sm rounded-md text-white px-3 py-2 hover:bg-slate-600">Edit</a>
-                        <a href="{{ route('permission.delete', $permission->id) }}" class="bg-red-700 text-sm rounded-md text-white px-3 py-2 hover:bg-red-600">Delete</a>
+                        <a href="{{ route('roles.edit', $role->id) }}" class="bg-slate-700 text-sm rounded-md text-white px-3 py-2 hover:bg-slate-600">Edit</a>
+                        <a href="{{ route('roles.delete', $role->id) }}" class="bg-red-700 text-sm rounded-md text-white px-3 py-2 hover:bg-red-600">Delete</a>
                     </td>
                 </tr>
                   
@@ -40,7 +40,7 @@
             </tbody >
            </table>
            <div class="my-3">
-            {{ $permissions->links() }}
+            {{-- {{ $roles->links() }} --}}
 
            </div>
             <div class="bg-white dark:bg-gray-800 overflow-hidden shadow-sm sm:rounded-lg">

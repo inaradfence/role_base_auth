@@ -1,0 +1,149 @@
+JWT Token
+
+Step 1... after creating app include this repo in the project main directory or root directory
+
+(https://jwt-auth.readthedocs.io/en/develop/laravel-installation/)
+composer require php-open-source-saver/jwt-auth
+
+Step 2... after runing the above command then generate a secret key
+
+php artisan vendor:publish --provider="PHPOpenSourceSaver\JWTAuth\Providers\LaravelServiceProvider"
+
+php artisan jwt:secret
+
+Step 3.... after this change user model 
+
+use Tymon\JWTAuth\Contracts\JWTSubject;
+
+Step 4...include the above line of code and implements itin class
+
+need to add 2 methods as well
+ public function getJWTIdentifier()
+    {
+        return $this->getKey();
+    }
+
+    /**
+     * Return a key value array, containing any custom claims to be added to the JWT.
+     *
+     * @return array
+     */
+    public function getJWTCustomClaims()
+    {
+        return [];
+    }
+
+Step 5.... after this add guard in config->auth.php
+
+ 'api' => [
+            'driver' => 'jwt',
+            'provider' => 'users',
+        ],
+
+Step 6.... add routes in routes->api.php and create AuthController 
+ update the code of AuthController
+ <?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Support\Facades\Auth;
+use App\Http\Controllers\Controller;
+use App\Http\Controllers\Request;
+use App\Models\User;
+use Illuminate\Support\Facades\Hash;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request as HttpRequest;
+use Illuminate\Support\Facades\Validator;
+class AuthController extends Controller
+{
+    /**
+     * Create a new AuthController instance.
+     *
+     * @return void
+     */
+    // public function __construct()
+    // {
+    //     $this->middleware('auth:api', ['except' => ['login']]);
+    // }
+
+    public function register (Request $request){
+        $validateData = $request->validate([
+            'name' => 'required|string|max:255',
+            'email' => 'required|string|email|max:255|unique:users',
+            'password' => 'required|string|min:8|confirmed',
+        ]);
+
+        $user = User::create([
+            'name' => $validateData['name'],
+            'email' => $validateData['email'],
+            'password' => bcrypt($validateData['password']),
+        ]);
+
+        $token = auth()->login($user);
+        return $this->respondWithToken($token);
+    }
+
+    /**
+     * Get a JWT via given credentials.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function login()
+    {
+        $credentials = request(['email', 'password']);
+
+        if (! $token = auth()->attempt($credentials)) {
+            return response()->json(['error' => 'Unauthorized'], 401);
+        }
+
+        return $this->respondWithToken($token);
+    }
+
+    /**
+     * Get the authenticated User.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function me()
+    {
+        return response()->json(auth()->user());
+    }
+
+    /**
+     * Log the user out (Invalidate the token).
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function logout()
+    {
+        auth()->logout();
+
+        return response()->json(['message' => 'Successfully logged out']);
+    }
+
+    /**
+     * Refresh a token.
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function refresh()
+    {
+        return $this->respondWithToken(auth()->refresh());
+    }
+
+    /**
+     * Get the token array structure.
+     *
+     * @param  string $token
+     *
+     * @return \Illuminate\Http\JsonResponse
+     */
+    protected function respondWithToken($token)
+    {
+        return response()->json([
+            'access_token' => $token,
+            'token_type' => 'bearer',
+            'expires_in' => auth()->factory()->getTTL() * 60
+        ]);
+    }
+}

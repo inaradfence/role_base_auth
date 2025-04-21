@@ -17,7 +17,8 @@ class PermissionController extends Controller
 {
     public function index()
     {
-        return view('Permission.list');
+        $permissions=Permission::orderBy('created_at','desc')->paginate(10);
+        return view('Permission.list', ['permissions' => $permissions]);
     }
     public function create()
     {
@@ -39,14 +40,46 @@ class PermissionController extends Controller
                 ->withInput();
         }    
     }
-   
-    public function edit()
-    {
-        // return view('Permission.create');
+
+    public function edit($id){
+        $permission = Permission::find($id);
+        if (!$permission) {
+            return redirect()->route('permission.index')->with('error', 'Permission not found.');
+        }
+        return view('Permission.edit', ['permission' => $permission]);
     }
 
 
+    public function update(Request $request, $id){
+        $validator = Validator::make($request->all(), [
+            'name' => 'required|min:3|unique:permissions,name,'.$id.',id'
+        ]);
+        if ($validator->passes()) {
+            $permission = Permission::find($id);
+            if (!$permission) {
+                return redirect()->route('permission.index')->with('error', 'Permission not found.');
+            }
+            $permission->name = $request->name;
+            $permission->update();
+            return redirect()->route('permission.index')
+                ->with('success', 'Permission updated successfully.');
+        } else {
+            return redirect()->route('permission.index')
+                ->withErrors($validator)
+                ->withInput();
+        }
+    }
 
+    public function destroy($id)
+    {
+        $permission = Permission::find($id);
+        if (!$permission) {
+            return redirect()->route('permission.index')->with('error', 'Permission not found.');
+        }
+        $permission->delete();
+        return redirect()->route('permission.index')
+            ->with('success', 'Permission deleted successfully.');
+    }
 
 
 }
