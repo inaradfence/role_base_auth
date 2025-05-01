@@ -147,3 +147,115 @@ class AuthController extends Controller
         ]);
     }
 }
+
+
+
+Step 7.... create a request file 
+
+php artisan make:request UserRegisterRequest 
+
+Step 8.... convert false into true and add rules in the rules function
+and add this request file in the AuthController and in register function just call validated(); method
+
+....................................................working Perfectly...............................................
+
+Roles and Permissions
+
+step 1... create admincontroller 
+
+step 2... composer require spatie/laravel-permission 
+run this command
+
+step 3... change the bootstrap->providers.php and add
+    Spatie\Permission\PermissionServiceProvider::class
+
+step 4... run the command 
+php artisan vendor:publish --provider="Spatie\Permission\PermissionServiceProvider"
+
+step 5... change the App->Models->user.php and add HasRoles in the top where notifiable mentioned
+
+step 6... now in login middleware add the condition
+
+public function login(Request $request)
+    {
+        if(Auth::attempt($request->only('email', 'password')))
+        {
+        // fetch the User
+        $user = Auth::user();
+
+        if($user-> hasRole('admin')){
+        return redirect()->route('admin.dashboard);
+        }
+        Auth::logout();
+        //can show erroe message
+        }
+    }
+
+
+......................................Middleware.............................................
+
+step 1... php artisan make:middleware AdminAuthMiddleware
+
+step 2... App->http->Middleware->AdminAuthMiddleware
+in handle function check user is loggesd in or not
+
+public function handle(Request $request, Closure $next): Response
+    {
+        if(Auth::check()){
+            return $next($request);
+        }
+        return redirect()->route('admin.login);
+    }
+
+
+ for specific role we can strict the middlware as well
+
+ public function handle(Request $request, Closure $next, ...$roles): Response
+    {
+        if(Auth::check() && Auth::user()->hasAnyRole($roles)){
+            return $next($request);
+        }
+        return redirect()->route('admin.login);
+    }
+
+    this role will pass through routes
+
+step 3... register the middleware
+
+ in bootstrap->app.php, 1st import middleware then
+
+return Application::configure(basePath: dirname(__DIR__))
+    ->withRouting(
+        web: __DIR__.'/../routes/web.php',
+        api: __DIR__.'/../routes/api.php',
+        commands: __DIR__.'/../routes/console.php',
+        health: '/up',
+    )
+    ->withMiddleware(function (Middleware $middleware) {
+        //change here
+        $middleware->alias([
+            'admin_auth'=> AdminAuthMiddleware::class,
+        ]);
+    })
+    ->withExceptions(function (Exceptions $exceptions) {
+        //
+    })->create();
+
+step 4... change the routes
+
+Route::middleware(['admin_auth])->group(function(){
+    Route::get('/admin/dashboard', [DashboardController::class, 'index'])->name('index');
+    and so on....
+})
+
+here we can specify the role 
+Route::middleware(['admin_auth:admin'])->group(function(){
+    Route::get('/admin/dashboard', [DashboardController::class, 'index'])->name('index');
+    and so on....
+})
+
+Note:   agr login user ko wapas login page pa jany sa rokna ho tou aik or middleware bny ga but is ma krna ya ha k agr user login ha tou usy dash board pa redirect kerny ki middleware ki condition lagani ha
+ register krna ha us middleware ko....
+ phir login waly routes ko us middleware k under rakh dena ha ...
+......................................Middleware Complete..........................................
+

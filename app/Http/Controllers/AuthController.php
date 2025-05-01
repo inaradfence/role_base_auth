@@ -25,10 +25,8 @@ class AuthController extends Controller
     // }
 
     public function register(UserRegisterRequest $request){
-        $validateData = $request->validate([
-          
-        ]);
-
+        // dd('register');
+        $validateData = $request->validated();
         $user = User::create([
             'name' => $validateData['name'],
             'email' => $validateData['email'],
@@ -48,7 +46,7 @@ class AuthController extends Controller
     {
         $credentials = request(['email', 'password']);
 
-        if (! $token = auth()->attempt($credentials)) {
+        if (! $token = auth('api')->attempt($credentials)) {
             return response()->json(['error' => 'Unauthorized'], 401);
         }
 

@@ -4,6 +4,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PermissionController;
 use App\Http\Controllers\RollerController;
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\Mail;
 
 // Route::get('/search', [PermissionController::class, 'index_search']);
 // Route::post('/search', [PermissionController::class, 'search_api'])->name('search.process');
@@ -37,6 +38,10 @@ Route::middleware('auth')->group(function () {
         Route::get('/edit/{id}', [RollerController::class, 'edit'])->name('edit');
         Route::post('/update/{id}', [RollerController::class, 'update'])->name('update');
         Route::get('/delete/{id}', [RollerController::class, 'destroy'])->name('delete');
+    });
+    Route::get('test', function () {
+        
+       Mail::to('V3E7o@example.com')->send(new \App\Mail\jobPosted());
     });
    
 });
