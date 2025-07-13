@@ -259,3 +259,10 @@ Note:   agr login user ko wapas login page pa jany sa rokna ho tou aik or middle
  phir login waly routes ko us middleware k under rakh dena ha ...
 ......................................Middleware Complete..........................................
 
+
+
+.....................................SEnd Mail..........................................
+step 1... php artisan make:mail Mail_name
+srep 2... create View
+step 3... create route 
+step 4... use Mail facedes pakges for send mail in controller
